@@ -1,0 +1,63 @@
+syntax = "proto3";
+package localcloud;
+
+option go_package = "github.com/youruser/localcloud-backend-go/proto;proto";
+
+import "google/protobuf/timestamp.proto";
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string role = 3; // "user" or "admin"
+}
+message AuthResponse {
+  string token = 1;
+}
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message FileMeta {
+  string id = 1;
+  string user_id = 2;
+  string storage_type = 3; // internal|external
+  string relative_path = 4;
+  int64 size = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListFilesRequest {
+  string storage_type = 1;
+  string path = 2; // relative path
+}
+message ListFilesResponse {
+  repeated FileMeta files = 1;
+}
+
+message UploadRequest {
+  // first message should be meta
+  FileMeta meta = 1;
+  bytes chunk_data = 2;
+}
+message UploadResponse {
+  string file_id = 1;
+}
+
+message DownloadRequest {
+  string file_id = 1;
+}
+message DownloadChunk {
+  bytes chunk_data = 1;
+}
+
+service AuthService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+}
+
+service FileService {
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc UploadFile(stream UploadRequest) returns (UploadResponse);
+  rpc DownloadFile(DownloadRequest) returns (stream DownloadChunk);
+}

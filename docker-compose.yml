@@ -1,0 +1,36 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: localcloud
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: .
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - STORAGE_INTERNAL_ROOT=${STORAGE_INTERNAL_ROOT}
+      - STORAGE_EXTERNAL_ROOT=${STORAGE_EXTERNAL_ROOT}
+      - SERVER_HOST=${SERVER_HOST}
+      - GRPC_PORT=${GRPC_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ${STORAGE_INTERNAL_ROOT}:${STORAGE_INTERNAL_ROOT}:rw
+      - ${STORAGE_EXTERNAL_ROOT}:${STORAGE_EXTERNAL_ROOT}:rw
+    ports:
+      - "${SERVER_HOST}:${GRPC_PORT}:50051"
+    depends_on:
+      - db
+
+volumes:
+  db-data:
