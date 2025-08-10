@@ -24,8 +24,9 @@ jobs:
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@master
         with:
-          host: 192.168.1.50
-          username: youruser
+          host: 192.168.1.1
+          username: aaronjoju
+          port: 22
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /srv/localcloud
