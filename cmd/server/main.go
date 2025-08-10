@@ -23,7 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
-	defer conn.Close(context.Background())
+	defer conn.Close()
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -31,7 +31,14 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	grpcserver.RegisterServices(grpcServer, conn)
+	connCtx := context.Background()
+	dbConn, err := conn.Acquire(connCtx)
+	if err != nil {
+		log.Fatalf("acquire db connection: %v", err)
+	}
+	defer dbConn.Release()
+
+	grpcserver.RegisterServices(grpcServer, dbConn.Conn())
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)

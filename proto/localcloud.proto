@@ -1,7 +1,7 @@
 syntax = "proto3";
 package localcloud;
 
-option go_package = "github.com/youruser/localcloud-backend-go/proto;proto";
+option go_package = "github.com/aaronjoju07/localcloud-backend-go/proto;proto";
 
 import "google/protobuf/timestamp.proto";
 
