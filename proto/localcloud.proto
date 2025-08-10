@@ -58,6 +58,7 @@ service AuthService {
 
 service FileService {
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
-  rpc UploadFile(stream UploadRequest) returns (UploadResponse);
+  // <- correct streaming RPC
+  rpc UploadFile (stream UploadRequest) returns (UploadResponse);
   rpc DownloadFile(DownloadRequest) returns (stream DownloadChunk);
 }
