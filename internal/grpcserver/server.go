@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/aaronjoju07/localcloud-backend-go/internal/auth"
 	"github.com/aaronjoju07/localcloud-backend-go/internal/storage"
@@ -93,7 +96,7 @@ func (f *fileServer) ListFiles(ctx context.Context, req *proto.ListFilesRequest)
 		resp := &proto.ListFilesResponse{}
 		for rows.Next() {
 			var fm proto.FileMeta
-			var created pgx.NullTime
+			var created interface{}
 			if err := rows.Scan(&fm.Id, &fm.UserId, &fm.StorageType, &fm.RelativePath, &fm.Size, &created); err != nil {
 				return nil, err
 			}
@@ -111,7 +114,7 @@ func (f *fileServer) ListFiles(ctx context.Context, req *proto.ListFilesRequest)
 	resp := &proto.ListFilesResponse{}
 	for rows.Next() {
 		var fm proto.FileMeta
-		var created pgx.NullTime
+		var created interface{}
 		if err := rows.Scan(&fm.Id, &fm.UserId, &fm.StorageType, &fm.RelativePath, &fm.Size, &created); err != nil {
 			return nil, err
 		}
@@ -120,45 +123,52 @@ func (f *fileServer) ListFiles(ctx context.Context, req *proto.ListFilesRequest)
 	return resp, nil
 }
 
-func (f *fileServer) UploadFile(stream proto.FileService_UploadFileServer) (*proto.UploadResponse, error) {
-	// receive first meta message & then chunks
+// New-style generic client-streaming signature (grpc-go modern API)
+func (f *fileServer) UploadFile(stream proto.FileService_UploadFileServer) error {
 	var meta *proto.FileMeta
-	buf := new(strings.Builder)
+	buf := bytes.NewBuffer(nil)
+
 	for {
 		req, err := stream.Recv()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
+		// First message should contain file metadata
 		if req.Meta != nil {
 			meta = req.Meta
 			continue
 		}
-		if req.ChunkData != nil {
-			buf.Write(req.ChunkData)
+
+		if len(req.ChunkData) > 0 {
+			if _, werr := buf.Write(req.ChunkData); werr != nil {
+				return werr
+			}
 		}
 	}
 	if meta == nil {
-		return nil, fmt.Errorf("missing meta")
+		return status.Error(codes.InvalidArgument, "missing file meta")
 	}
 
-	// store via storage.SaveStream
-	reader := strings.NewReader(buf.String())
-	storedRel, size, err := f.storage.SaveStream(stream.Context(), meta.StorageType, meta.UserId, meta.RelativePath, reader)
+	// Save file to storage
+	storedRel, size, err := f.storage.SaveStream(stream.Context(), meta.StorageType, meta.UserId, meta.RelativePath, bytes.NewReader(buf.Bytes()))
 	if err != nil {
-		return nil, err
+		return status.Errorf(codes.Internal, "save failed: %v", err)
 	}
 
-	// insert DB record
-	_, err = f.pool.Exec(stream.Context(), "INSERT INTO files(id, user_id, storage_type, relative_path, size) VALUES($1,$2,$3,$4,$5)", meta.Id, meta.UserId, meta.StorageType, storedRel, size)
+	// Insert into DB
+	_, err = f.pool.Exec(stream.Context(),
+		"INSERT INTO files(id, user_id, storage_type, relative_path, size) VALUES($1,$2,$3,$4,$5)",
+		meta.Id, meta.UserId, meta.StorageType, storedRel, size)
 	if err != nil {
-		return nil, err
+		return status.Errorf(codes.Internal, "db insert failed: %v", err)
 	}
 
-	return &proto.UploadResponse{FileId: meta.Id}, nil
+	return stream.SendAndClose(&proto.UploadResponse{FileId: meta.Id})
 }
+
 
 func (f *fileServer) DownloadFile(req *proto.DownloadRequest, stream proto.FileService_DownloadFileServer) error {
 	// fetch DB entry

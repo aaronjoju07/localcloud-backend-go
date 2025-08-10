@@ -1,7 +1,7 @@
 syntax = "proto3";
 package localcloud;
 
-option go_package = "github.com/youruser/localcloud-backend-go/proto;proto";
+option go_package = "github.com/aaronjoju07/localcloud-backend-go/proto;proto";
 
 import "google/protobuf/timestamp.proto";
 
@@ -58,6 +58,7 @@ service AuthService {
 
 service FileService {
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
-  rpc UploadFile(stream UploadRequest) returns (UploadResponse);
+  // <- correct streaming RPC
+  rpc UploadFile (stream UploadRequest) returns (UploadResponse);
   rpc DownloadFile(DownloadRequest) returns (stream DownloadChunk);
 }
